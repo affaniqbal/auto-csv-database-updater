@@ -103,19 +103,20 @@ def process_files(core_column, source_column):
         best_match = None
         max_ratio = 0
         for core_value in core_col:
-            ratio = fuzz.partial_ratio(value, core_value)
+            ratio = fuzz.ratio(value, core_value)
             if ratio >= min_ratio and ratio > max_ratio:
                 best_match = core_value
                 max_ratio = ratio
-        potential_matches.append((value, best_match))
+        potential_matches.append((value, best_match, max_ratio))
 
     # Display the potential matches in a treeview
     match_window = tk.Toplevel(window)
     match_window.title("Potential Matches")
 
-    treeview = ttk.Treeview(match_window, columns=("Source", "Match", "Action"), show="headings")
+    treeview = ttk.Treeview(match_window, columns=("Source", "Match", "Ratio", "Action"), show="headings")
     treeview.heading("Source", text="Source Value")
     treeview.heading("Match", text="Suggested Match")
+    treeview.heading("Ratio", text="Match Ratio")
     treeview.heading("Action", text="Action")
     treeview.pack(fill=tk.BOTH, expand=True)
 
@@ -128,16 +129,18 @@ def process_files(core_column, source_column):
         elif action == "Keep Match":
             treeview.set(item, "Match", match_value)
         else:  # Keep Both
-            treeview.insert("", tk.END, values=(match_value, match_value, "Keep Match"))
+            treeview.insert("", tk.END, values=(match_value, match_value, 100, ""))
 
-    for value, match in potential_matches:
+    for value, match, ratio in potential_matches:
         if match is not None:
-            item = treeview.insert("", tk.END, values=(value, match, ""))
+            item = treeview.insert("", tk.END, values=(value, match, ratio, ""))
         else:
-            item = treeview.insert("", tk.END, values=(value, "No Match", ""))
+            item = treeview.insert("", tk.END, values=(value, "No Match", 0, ""))
 
         button_frame = ttk.Frame(match_window)
-        button_frame.pack(side=tk.TOP, fill=tk.X)
+        treeview.set(item, "Action", "")
+        treeview.item(item, tags=("button_frame",))
+        button_frame.grid(row=treeview.index(item), column=3, sticky="nsew")
 
         keep_source_button = ttk.Button(button_frame, text="Keep Source", command=lambda i=item: update_action(i, "Keep Source"))
         keep_source_button.pack(side=tk.LEFT, padx=5)
@@ -151,11 +154,12 @@ def process_files(core_column, source_column):
     def confirm_matches():
         confirmed_matches = []
         for item in treeview.get_children():
-            values = treeview.item(item, "values")
-            source_value = values[0]
-            match_value = values[1]
-            if match_value != "No Match":
-                confirmed_matches.append((source_value, match_value))
+            if treeview.tag_has("button_frame", item):
+                values = treeview.item(item, "values")
+                source_value = values[0]
+                match_value = values[1]
+                if match_value != "No Match":
+                    confirmed_matches.append((source_value, match_value))
 
         source_dict = {value[0]: value[1] for value in confirmed_matches}
         source['Matched'] = source[source_column].map(source_dict)
